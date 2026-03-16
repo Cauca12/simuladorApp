@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Préstamos</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --surface: #111827;
+    --surface2: #1a2236;
+    --border: #1e2d45;
+    --accent: #00e5c8;
+    --accent2: #0099ff;
+    --accent-glow: rgba(0,229,200,0.15);
+    --text: #e8f0fe;
+    --muted: #7a90b0;
+    --danger: #ff4d6d;
+    --gold: #ffd166;
+    --green: #06d6a0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,200,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,200,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 52px;
+  }
+
+  .badge {
+    display: inline-block;
+    background: var(--accent-glow);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 6px 18px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    line-height: 1.1;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .subtitle {
+    margin-top: 14px;
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 300;
+  }
+
+  /* Form card */
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+    margin-bottom: 36px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .form-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent);
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+
+  @media (max-width: 600px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .form-card { padding: 28px 20px; }
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+  }
+
+  .input-wrap {
+    position: relative;
+  }
+
+  .prefix {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--accent);
+    font-family: 'DM Mono', monospace;
+    font-size: 15px;
+    font-weight: 500;
+    pointer-events: none;
+  }
+
+  input, select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 15px;
+    padding: 14px 16px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .has-prefix input {
+    padding-left: 36px;
+  }
+
+  input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  select {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2300e5c8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 44px;
+  }
+
+  select option {
+    background: var(--surface2);
+  }
+
+  .tasa-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+
+  .tasa-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--gold);
+  }
+
+  .tasa-desc {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .lock-icon {
+    margin-left: auto;
+    opacity: 0.4;
+  }
+
+  .btn-calcular {
+    width: 100%;
+    margin-top: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    padding: 16px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 4px 24px rgba(0,229,200,0.25);
+  }
+
+  .btn-calcular:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 32px rgba(0,229,200,0.35);
+  }
+
+  .btn-calcular:active {
+    transform: translateY(0);
+  }
+
+  /* Summary strip */
+  .summary-strip {
+    display: none;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  @media (max-width: 600px) {
+    .summary-strip { grid-template-columns: 1fr; }
+  }
+
+  .summary-strip.visible { display: grid; }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.capital::after { background: var(--accent2); }
+  .stat-card.intereses::after { background: var(--danger); }
+  .stat-card.total::after { background: var(--gold); }
+
+  .stat-label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    margin-bottom: 10px;
+  }
+
+  .stat-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 500;
+  }
+
+  .stat-card.capital .stat-val { color: var(--accent2); }
+  .stat-card.intereses .stat-val { color: var(--danger); }
+  .stat-card.total .stat-val { color: var(--gold); }
+
+  /* Table */
+  .table-wrap {
+    display: none;
+    animation: fadeUp 0.5s ease 0.1s both;
+  }
+
+  .table-wrap.visible { display: block; }
+
+  .table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .table-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem;
+    color: var(--text);
+  }
+
+  .table-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .table-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead tr {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    padding: 14px 20px;
+    text-align: right;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  th:first-child { text-align: left; }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+
+  tbody tr:hover {
+    background: rgba(0,229,200,0.04);
+  }
+
+  td {
+    padding: 16px 20px;
+    text-align: right;
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    color: var(--text);
+  }
+
+  td:first-child {
+    text-align: left;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  td.saldo { color: var(--muted); }
+  td.intereses { color: var(--danger); }
+  td.capital { color: var(--accent2); }
+  td.cuota { color: var(--gold); font-weight: 500; }
+
+  /* Footer totals row */
+  tfoot tr {
+    background: var(--surface2);
+    border-top: 1px solid var(--border);
+  }
+
+  tfoot td {
+    font-weight: 600;
+    color: var(--text);
+    padding: 14px 20px;
+  }
+
+  tfoot td:first-child { color: var(--muted); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
+  tfoot td.t-intereses { color: var(--danger); }
+  tfoot td.t-capital { color: var(--accent2); }
+  tfoot td.t-cuota { color: var(--gold); }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .error-msg {
+    color: var(--danger);
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    margin-top: 6px;
+    display: none;
+  }
+
+  .error-msg.show { display: block; }
+
+  /* Number animation */
+  @keyframes countUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .stat-val.animate {
+    animation: countUp 0.4s ease both;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <div class="badge">Herramienta Financiera</div>
+    <h1>Simulador de<br><em>Préstamos</em></h1>
+    <p class="subtitle">Proyección de intereses mes vencido · Tasa fija 1.5% mensual</p>
+  </header>
+
+  <!-- Form -->
+  <div class="form-card">
+    <div class="form-grid">
+
+      <div class="field">
+        <label>Valor del Préstamo</label>
+        <div class="input-wrap has-prefix">
+          <span class="prefix">$</span>
+          <input type="text" id="valorPrestamo" placeholder="2.000.000" autocomplete="off" inputmode="numeric">
+        </div>
+        <span class="error-msg" id="errorValor">Ingresa un valor válido mayor a $0</span>
+      </div>
+
+      <div class="field">
+        <label>Tasa de Interés</label>
+        <div class="tasa-badge">
+          <span class="tasa-value">1.5%</span>
+          <span class="tasa-desc">Mes vencido · Fija</span>
+          <svg class="lock-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Plazo (meses)</label>
+        <div class="input-wrap">
+          <select id="plazo">
+            <option value="">— Seleccionar —</option>
+            <option value="1">1 mes</option>
+            <option value="2">2 meses</option>
+            <option value="3">3 meses</option>
+            <option value="4">4 meses</option>
+            <option value="5">5 meses</option>
+            <option value="6">6 meses</option>
+            <option value="7">7 meses</option>
+            <option value="8">8 meses</option>
+            <option value="9">9 meses</option>
+            <option value="10">10 meses</option>
+            <option value="11">11 meses</option>
+            <option value="12">12 meses</option>
+          </select>
+        </div>
+        <span class="error-msg" id="errorPlazo">Selecciona el plazo</span>
+      </div>
+
+      <div class="field">
+        <label>Fecha de Desembolso</label>
+        <div style="display:grid; grid-template-columns: 1fr 2fr; gap: 10px;">
+          <div class="input-wrap">
+            <select id="diaInicio">
+              <option value="">Día</option>
+            </select>
+          </div>
+          <div class="input-wrap">
+            <select id="mesInicio">
+              <option value="">— Mes —</option>
+              <option value="0">Enero</option>
+              <option value="1">Febrero</option>
+              <option value="2">Marzo</option>
+              <option value="3">Abril</option>
+              <option value="4">Mayo</option>
+              <option value="5">Junio</option>
+              <option value="6">Julio</option>
+              <option value="7">Agosto</option>
+              <option value="8">Septiembre</option>
+              <option value="9">Octubre</option>
+              <option value="10">Noviembre</option>
+              <option value="11">Diciembre</option>
+            </select>
+          </div>
+        </div>
+        <span class="error-msg" id="errorMes">Selecciona el día y mes de inicio</span>
+      </div>
+
+    </div>
+
+    <button class="btn-calcular" onclick="calcular()">Calcular Proyección</button>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary-strip" id="summaryStrip">
+    <div class="stat-card capital">
+      <div class="stat-label">Capital Prestado</div>
+      <div class="stat-val" id="sumCapital">—</div>
+    </div>
+    <div class="stat-card intereses">
+      <div class="stat-label">Total Intereses</div>
+      <div class="stat-val" id="sumIntereses">—</div>
+    </div>
+    <div class="stat-card total">
+      <div class="stat-label">Total a Pagar</div>
+      <div class="stat-val" id="sumTotal">—</div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap" id="tableWrap">
+    <div class="table-header">
+      <div class="table-title">Proyección de Intereses</div>
+      <div class="table-meta" id="tableMeta">—</div>
+    </div>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha de Pago</th>
+            <th>Saldo Deuda</th>
+            <th>Intereses</th>
+            <th>Abono Capital</th>
+            <th>Vr. Cuota</th>
+          </tr>
+        </thead>
+        <tbody id="tablaBody"></tbody>
+        <tfoot>
+          <tr>
+            <td>TOTALES</td>
+            <td></td>
+            <td class="t-intereses" id="totIntereses">—</td>
+            <td class="t-capital" id="totCapital">—</td>
+            <td class="t-cuota" id="totCuota">—</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const DIAS_MES = [31,28,31,30,31,30,31,31,30,31,30,31];
+  const TASA = 0.015;
+
+  // Populate day dropdown (1–31 initially, updates on month change)
+  const selDia = document.getElementById('diaInicio');
+  const selMes = document.getElementById('mesInicio');
+
+  function poblarDias(maxDia) {
+    const current = selDia.value;
+    selDia.innerHTML = '<option value="">Día</option>';
+    for (let d = 1; d <= maxDia; d++) {
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = d;
+      selDia.appendChild(opt);
+    }
+    if (current && parseInt(current) <= maxDia) selDia.value = current;
+  }
+
+  poblarDias(31);
+
+  selMes.addEventListener('change', function() {
+    const m = parseInt(this.value);
+    if (!isNaN(m)) poblarDias(DIAS_MES[m]);
+    else poblarDias(31);
+  });
+
+  // Format number as Colombian pesos
+  function fmt(n) {
+    return '$ ' + Math.round(n).toLocaleString('es-CO');
+  }
+
+  // Allow formatted input
+  const inputValor = document.getElementById('valorPrestamo');
+  inputValor.addEventListener('input', function() {
+    let raw = this.value.replace(/\D/g, '');
+    if (raw) {
+      this.value = parseInt(raw).toLocaleString('es-CO');
+    }
+  });
+
+  function getValor() {
+    return parseInt(inputValor.value.replace(/\D/g, '') || '0');
+  }
+
+  function validate() {
+    let ok = true;
+    const valor = getValor();
+    const plazo = parseInt(document.getElementById('plazo').value);
+    const mes = document.getElementById('mesInicio').value;
+    const dia = document.getElementById('diaInicio').value;
+
+    const errValor = document.getElementById('errorValor');
+    const errPlazo = document.getElementById('errorPlazo');
+    const errMes = document.getElementById('errorMes');
+
+    errValor.classList.remove('show');
+    errPlazo.classList.remove('show');
+    errMes.classList.remove('show');
+
+    if (!valor || valor <= 0) { errValor.classList.add('show'); ok = false; }
+    if (!plazo || plazo < 1 || plazo > 12) { errPlazo.classList.add('show'); ok = false; }
+    if (mes === '' || dia === '') { errMes.classList.add('show'); ok = false; }
+
+    return ok;
+  }
+
+  function calcular() {
+    if (!validate()) return;
+
+    const valor = getValor();
+    const plazo = parseInt(document.getElementById('plazo').value);
+    const mesInicioIdx = parseInt(document.getElementById('mesInicio').value);
+    const diaInicio = parseInt(document.getElementById('diaInicio').value);
+
+    // Cuota fija mensual (amortización lineal)
+    const abonoCapital = valor / plazo;
+    let saldoDeuda = valor;
+
+    let totalIntereses = 0;
+    let totalCapital = 0;
+    let totalCuota = 0;
+
+    const tbody = document.getElementById('tablaBody');
+    tbody.innerHTML = '';
+
+    for (let i = 0; i < plazo; i++) {
+      const mesIdx = (mesInicioIdx + 1 + i) % 12;
+      const maxDia = DIAS_MES[mesIdx];
+      const diaCuota = Math.min(diaInicio, maxDia);
+      const fechaPago = `${String(diaCuota).padStart(2,'0')}/${MESES[mesIdx]}`;
+
+      const interes = saldoDeuda * TASA;
+      const cuota = abonoCapital + interes;
+
+      totalIntereses += interes;
+      totalCapital += abonoCapital;
+      totalCuota += cuota;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${fechaPago}</td>
+        <td class="saldo">${fmt(saldoDeuda)}</td>
+        <td class="intereses">${fmt(interes)}</td>
+        <td class="capital">${fmt(abonoCapital)}</td>
+        <td class="cuota">${fmt(cuota)}</td>
+      `;
+      tr.style.opacity = '0';
+      tr.style.transform = 'translateY(10px)';
+      tr.style.transition = `opacity 0.3s ease ${i * 0.05}s, transform 0.3s ease ${i * 0.05}s`;
+      tbody.appendChild(tr);
+
+      setTimeout(() => {
+        tr.style.opacity = '1';
+        tr.style.transform = 'translateY(0)';
+      }, 20);
+
+      saldoDeuda -= abonoCapital;
+    }
+
+    // Totals
+    document.getElementById('totIntereses').textContent = fmt(totalIntereses);
+    document.getElementById('totCapital').textContent = fmt(totalCapital);
+    document.getElementById('totCuota').textContent = fmt(totalCuota);
+
+    // Summary
+    document.getElementById('sumCapital').textContent = fmt(valor);
+    document.getElementById('sumIntereses').textContent = fmt(totalIntereses);
+    document.getElementById('sumTotal').textContent = fmt(totalCuota);
+
+    // Animate stats
+    ['sumCapital','sumIntereses','sumTotal'].forEach(id => {
+      const el = document.getElementById(id);
+      el.classList.remove('animate');
+      void el.offsetWidth;
+      el.classList.add('animate');
+    });
+
+    // Meta
+    const mesFin = MESES[(mesInicioIdx + plazo) % 12];
+    const mesPago = MESES[(mesInicioIdx + 1) % 12];
+    document.getElementById('tableMeta').textContent =
+      `${plazo} cuota${plazo > 1 ? 's' : ''} · ${diaInicio} ${mesPago} → ${diaInicio} ${mesFin}`;
+
+    // Show panels
+    document.getElementById('summaryStrip').classList.add('visible');
+    document.getElementById('tableWrap').classList.add('visible');
+  }
+</script>
+
+</body>
+</html>
