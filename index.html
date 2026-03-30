@@ -297,6 +297,45 @@
   .stat-card.intereses .stat-val { color: var(--danger); }
   .stat-card.total .stat-val { color: var(--gold); }
 
+  .export-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .btn-export {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+  }
+
+  .btn-export:hover { opacity: 0.85; transform: translateY(-1px); }
+  .btn-export:active { transform: translateY(0); }
+
+  .btn-excel {
+    background: rgba(6, 214, 160, 0.1);
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .btn-excel:hover { box-shadow: 0 4px 16px rgba(6,214,160,0.2); }
+
+  .btn-pdf {
+    background: rgba(255, 77, 109, 0.1);
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  .btn-pdf:hover { box-shadow: 0 4px 16px rgba(255,77,109,0.2); }
+
   /* Table */
   .table-wrap {
     display: none;
@@ -647,6 +686,16 @@
       <div class="table-title">Proyección de Intereses</div>
       <div class="table-meta" id="tableMeta">—</div>
     </div>
+    <div class="export-bar">
+      <button class="btn-export btn-excel" onclick="exportarExcel()">
+        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+        Descargar Excel
+      </button>
+      <button class="btn-export btn-pdf" onclick="exportarPDF()">
+        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        Descargar PDF
+      </button>
+    </div>
     <div class="table-container">
       <table>
         <thead>
@@ -674,12 +723,19 @@
 
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
   const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const DIAS_MES = [31,28,31,30,31,30,31,31,30,31,30,31];
   const TASA = 0.015;
 
-  // Populate day dropdown (1–31 initially, updates on month change)
+  // Global state for export
+  let tablaData = [];
+  let resumenData = {};
+
+  // Populate day dropdown
   const selDia = document.getElementById('diaInicio');
   const selMes = document.getElementById('mesInicio');
 
@@ -703,18 +759,18 @@
     else poblarDias(31);
   });
 
-  // Format number as Colombian pesos
   function fmt(n) {
     return '$ ' + Math.round(n).toLocaleString('es-CO');
   }
 
-  // Allow formatted input
+  function fmtNum(n) {
+    return Math.round(n);
+  }
+
   const inputValor = document.getElementById('valorPrestamo');
   inputValor.addEventListener('input', function() {
     let raw = this.value.replace(/\D/g, '');
-    if (raw) {
-      this.value = parseInt(raw).toLocaleString('es-CO');
-    }
+    if (raw) this.value = parseInt(raw).toLocaleString('es-CO');
   });
 
   function getValor() {
@@ -728,17 +784,11 @@
     const mes = document.getElementById('mesInicio').value;
     const dia = document.getElementById('diaInicio').value;
 
-    const errValor = document.getElementById('errorValor');
-    const errPlazo = document.getElementById('errorPlazo');
-    const errMes = document.getElementById('errorMes');
+    ['errorValor','errorPlazo','errorMes'].forEach(id => document.getElementById(id).classList.remove('show'));
 
-    errValor.classList.remove('show');
-    errPlazo.classList.remove('show');
-    errMes.classList.remove('show');
-
-    if (!valor || valor <= 0) { errValor.classList.add('show'); ok = false; }
-    if (!plazo || plazo < 1 || plazo > 12) { errPlazo.classList.add('show'); ok = false; }
-    if (mes === '' || dia === '') { errMes.classList.add('show'); ok = false; }
+    if (!valor || valor <= 0) { document.getElementById('errorValor').classList.add('show'); ok = false; }
+    if (!plazo || plazo < 1 || plazo > 12) { document.getElementById('errorPlazo').classList.add('show'); ok = false; }
+    if (mes === '' || dia === '') { document.getElementById('errorMes').classList.add('show'); ok = false; }
 
     return ok;
   }
@@ -751,13 +801,11 @@
     const mesInicioIdx = parseInt(document.getElementById('mesInicio').value);
     const diaInicio = parseInt(document.getElementById('diaInicio').value);
 
-    // Cuota fija mensual (amortización lineal)
     const abonoCapital = valor / plazo;
     let saldoDeuda = valor;
+    let totalIntereses = 0, totalCapital = 0, totalCuota = 0;
 
-    let totalIntereses = 0;
-    let totalCapital = 0;
-    let totalCuota = 0;
+    tablaData = [];
 
     const tbody = document.getElementById('tablaBody');
     tbody.innerHTML = '';
@@ -775,6 +823,15 @@
       totalCapital += abonoCapital;
       totalCuota += cuota;
 
+      // Save for export
+      tablaData.push({
+        fecha: fechaPago,
+        saldo: Math.round(saldoDeuda),
+        intereses: Math.round(interes),
+        capital: Math.round(abonoCapital),
+        cuota: Math.round(cuota)
+      });
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${fechaPago}</td>
@@ -787,26 +844,18 @@
       tr.style.transform = 'translateY(10px)';
       tr.style.transition = `opacity 0.3s ease ${i * 0.05}s, transform 0.3s ease ${i * 0.05}s`;
       tbody.appendChild(tr);
-
-      setTimeout(() => {
-        tr.style.opacity = '1';
-        tr.style.transform = 'translateY(0)';
-      }, 20);
+      setTimeout(() => { tr.style.opacity = '1'; tr.style.transform = 'translateY(0)'; }, 20);
 
       saldoDeuda -= abonoCapital;
     }
 
-    // Totals
     document.getElementById('totIntereses').textContent = fmt(totalIntereses);
     document.getElementById('totCapital').textContent = fmt(totalCapital);
     document.getElementById('totCuota').textContent = fmt(totalCuota);
-
-    // Summary
     document.getElementById('sumCapital').textContent = fmt(valor);
     document.getElementById('sumIntereses').textContent = fmt(totalIntereses);
     document.getElementById('sumTotal').textContent = fmt(totalCuota);
 
-    // Animate stats
     ['sumCapital','sumIntereses','sumTotal'].forEach(id => {
       const el = document.getElementById(id);
       el.classList.remove('animate');
@@ -814,15 +863,205 @@
       el.classList.add('animate');
     });
 
-    // Meta
     const mesFin = MESES[(mesInicioIdx + plazo) % 12];
     const mesPago = MESES[(mesInicioIdx + 1) % 12];
     document.getElementById('tableMeta').textContent =
       `${plazo} cuota${plazo > 1 ? 's' : ''} · ${diaInicio} ${mesPago} → ${diaInicio} ${mesFin}`;
 
-    // Show panels
+    resumenData = {
+      valor, plazo, tasa: '1.5% mes vencido',
+      desembolso: `${diaInicio} de ${MESES[mesInicioIdx]}`,
+      totalIntereses: Math.round(totalIntereses),
+      totalCapital: Math.round(totalCapital),
+      totalCuota: Math.round(totalCuota)
+    };
+
     document.getElementById('summaryStrip').classList.add('visible');
     document.getElementById('tableWrap').classList.add('visible');
+  }
+
+  // ── EXCEL EXPORT ──
+  function exportarExcel() {
+    if (!tablaData.length) return;
+
+    const wb = XLSX.utils.book_new();
+    const ws_data = [];
+
+    // Title block
+    ws_data.push(['SIMULADOR DE PRÉSTAMOS']);
+    ws_data.push([]);
+    ws_data.push(['Capital prestado:', resumenData.valor]);
+    ws_data.push(['Tasa de interés:', resumenData.tasa]);
+    ws_data.push(['Plazo:', `${resumenData.plazo} meses`]);
+    ws_data.push(['Fecha desembolso:', resumenData.desembolso]);
+    ws_data.push([]);
+    ws_data.push(['PROYECCIÓN DE INTERESES CRÉDITO']);
+    ws_data.push([]);
+
+    // Headers
+    ws_data.push(['MES', 'SALDO DEUDA', 'INTERESES', 'ABONO A CAPITAL', 'VR. CUOTA']);
+
+    // Rows
+    tablaData.forEach(r => {
+      ws_data.push([r.fecha, r.saldo, r.intereses, r.capital, r.cuota]);
+    });
+
+    // Totals
+    ws_data.push(['TOTALES', '', resumenData.totalIntereses, resumenData.totalCapital, resumenData.totalCuota]);
+
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+
+    // Column widths
+    ws['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 15 }];
+
+    // Style helpers (limited in SheetJS community, but set number formats)
+    const dataStartRow = 11; // 1-indexed row where headers are
+    const numFmt = '$#,##0';
+    for (let i = 0; i < tablaData.length + 1; i++) {
+      ['B','C','D','E'].forEach(col => {
+        const cell = ws[`${col}${dataStartRow + 1 + i}`];
+        if (cell) cell.z = numFmt;
+      });
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Proyección');
+    XLSX.writeFile(wb, 'simulador_prestamo.xlsx');
+  }
+
+  // ── PDF EXPORT ──
+  function exportarPDF() {
+    if (!tablaData.length) return;
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const azul = [17, 24, 39];
+    const acento = [0, 229, 200];
+    const gris = [122, 144, 176];
+    const rojo = [255, 77, 109];
+    const dorado = [255, 209, 102];
+    const azulC = [0, 153, 255];
+
+    // Background header bar
+    doc.setFillColor(...azul);
+    doc.rect(0, 0, 210, 38, 'F');
+
+    // Accent top line
+    doc.setFillColor(...acento);
+    doc.rect(0, 0, 210, 1.5, 'F');
+
+    // Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor(232, 240, 254);
+    doc.text('SIMULADOR DE PRÉSTAMOS', 14, 16);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...gris);
+    doc.text('Proyección de intereses · Tasa fija 1.5% mes vencido', 14, 23);
+
+    // Summary pills
+    const pills = [
+      { label: 'CAPITAL', value: `$ ${resumenData.valor.toLocaleString('es-CO')}`, color: azulC },
+      { label: 'INTERESES', value: `$ ${resumenData.totalIntereses.toLocaleString('es-CO')}`, color: rojo },
+      { label: 'TOTAL A PAGAR', value: `$ ${resumenData.totalCuota.toLocaleString('es-CO')}`, color: dorado },
+    ];
+
+    const pillW = 58, pillH = 14, pillY = 44;
+    pills.forEach((p, i) => {
+      const x = 14 + i * (pillW + 4);
+      doc.setFillColor(26, 34, 54);
+      doc.roundedRect(x, pillY, pillW, pillH, 2, 2, 'F');
+      doc.setDrawColor(...p.color);
+      doc.setLineWidth(0.4);
+      doc.roundedRect(x, pillY, pillW, pillH, 2, 2, 'S');
+      doc.setFontSize(7);
+      doc.setTextColor(...gris);
+      doc.setFont('helvetica', 'bold');
+      doc.text(p.label, x + 4, pillY + 5);
+      doc.setFontSize(9);
+      doc.setTextColor(...p.color);
+      doc.setFont('helvetica', 'bold');
+      doc.text(p.value, x + 4, pillY + 11);
+    });
+
+    // Info row
+    doc.setFontSize(8);
+    doc.setTextColor(...gris);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Plazo: ${resumenData.plazo} meses  ·  Desembolso: ${resumenData.desembolso}  ·  Tasa: ${resumenData.tasa}`, 14, 66);
+
+    // Table
+    const headers = [['Fecha de Pago', 'Saldo Deuda', 'Intereses', 'Abono Capital', 'Vr. Cuota']];
+    const rows = tablaData.map(r => [
+      r.fecha,
+      `$ ${r.saldo.toLocaleString('es-CO')}`,
+      `$ ${r.intereses.toLocaleString('es-CO')}`,
+      `$ ${r.capital.toLocaleString('es-CO')}`,
+      `$ ${r.cuota.toLocaleString('es-CO')}`
+    ]);
+    rows.push([
+      'TOTALES', '',
+      `$ ${resumenData.totalIntereses.toLocaleString('es-CO')}`,
+      `$ ${resumenData.totalCapital.toLocaleString('es-CO')}`,
+      `$ ${resumenData.totalCuota.toLocaleString('es-CO')}`
+    ]);
+
+    doc.autoTable({
+      startY: 70,
+      head: headers,
+      body: rows,
+      theme: 'plain',
+      styles: {
+        font: 'helvetica',
+        fontSize: 9,
+        cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
+        textColor: [232, 240, 254],
+        fillColor: [17, 24, 39],
+        lineColor: [30, 45, 69],
+        lineWidth: 0.3,
+      },
+      headStyles: {
+        fillColor: [26, 34, 54],
+        textColor: [0, 229, 200],
+        fontStyle: 'bold',
+        fontSize: 8,
+        halign: 'right',
+      },
+      columnStyles: {
+        0: { halign: 'left', textColor: [0, 229, 200], fontStyle: 'bold' },
+        1: { halign: 'right', textColor: [122, 144, 176] },
+        2: { halign: 'right', textColor: [255, 77, 109] },
+        3: { halign: 'right', textColor: [0, 153, 255] },
+        4: { halign: 'right', textColor: [255, 209, 102], fontStyle: 'bold' },
+      },
+      alternateRowStyles: { fillColor: [17, 24, 39] },
+      didParseCell(data) {
+        // Style totals row
+        if (data.row.index === tablaData.length) {
+          data.cell.styles.fillColor = [26, 34, 54];
+          data.cell.styles.fontStyle = 'bold';
+          if (data.column.index === 0) {
+            data.cell.styles.textColor = gris;
+            data.cell.styles.fontSize = 7;
+          }
+        }
+      },
+    });
+
+    // Footer
+    const pageH = doc.internal.pageSize.height;
+    doc.setFillColor(...azul);
+    doc.rect(0, pageH - 10, 210, 10, 'F');
+    doc.setFontSize(7);
+    doc.setTextColor(...gris);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Simulador de Préstamos · Tasa 1.5% mes vencido', 14, pageH - 3.5);
+    const fecha = new Date().toLocaleDateString('es-CO');
+    doc.text(`Generado: ${fecha}`, 196, pageH - 3.5, { align: 'right' });
+
+    doc.save('simulador_prestamo.pdf');
   }
 </script>
 
